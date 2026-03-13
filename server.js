@@ -10,7 +10,7 @@ app.use(express.json());
 const API_KEY = process.env.NVIDIA_API_KEY;
 const INVOKE_URL = "https://ai.api.nvidia.com/v1/genai/black-forest-labs/flux.1-schnell";
 
-/* Root route (browser test ke liye) */
+/* Root route */
 app.get("/", (req, res) => {
   res.send("Backend running 🚀");
 });
@@ -22,6 +22,12 @@ app.post("/generate-image", async (req, res) => {
 
   if (!prompt) {
     return res.status(400).json({ error: "Prompt required" });
+  }
+
+  if (!API_KEY) {
+    return res.status(500).json({
+      error: "NVIDIA_API_KEY missing in environment variables"
+    });
   }
 
   try {
@@ -44,12 +50,32 @@ app.post("/generate-image", async (req, res) => {
 
     const data = await response.json();
 
-    res.json(data);
+    /* NVIDIA response parsing */
+    const base64 =
+      data?.artifacts?.[0]?.base64 ||
+      data?.data?.[0]?.b64_json ||
+      null;
+
+    if (!base64) {
+      return res.json({
+        error: "Image generation failed",
+        raw_response: data
+      });
+    }
+
+    /* Clean response */
+    res.json({
+      image: base64
+    });
 
   } catch (err) {
 
-    console.error(err);
-    res.status(500).json({ error: "Image generation failed" });
+    console.error("NVIDIA API error:", err);
+
+    res.status(500).json({
+      error: "Server error",
+      details: err.message
+    });
 
   }
 
